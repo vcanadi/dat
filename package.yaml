@@ -4,7 +4,7 @@ license:            NONE
 author:             Vito Canadi
 maintainer:         vito.canadi@gmail.com
 extra-source-files: CHANGELOG.md
-synopsis:           ---
+synopsis:           Alternative generic representation of data types
 
 default-extensions:
   - LambdaCase
@@ -24,7 +24,6 @@ tests:
   spec:
     build-depends:
     - base
-    - hspec
     - dat
     main: Spec.hs
     source-dirs: spec

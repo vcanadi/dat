@@ -13,60 +13,25 @@
 
 module Dat.Core where
 
-import Linear.V2(V2)
-import Linear.V3(V3)
 import Data.Kind (Type)
 import GHC.TypeLits
 import Data.Proxy
 import GHC.Generics (M1 (..), (:+:) (..), (:*:) ((:*:)), Generic (from, Rep), Meta (..), D, C, C1, S1, Rec0, U1(U1), K1(K1), D1, to, Constructor (conName), Datatype (datatypeName), Selector (selName), FixityI(PrefixI), SourceUnpackedness(..), SourceStrictness(..), DecidedStrictness(..) )
-import Control.Lens.TH(makeLenses)
-import Data.Map.Strict (Map, insertWith, fromList, unionWith, toList)
-import Control.Arrow ((>>>), Arrow (second), left)
-import Data.List (intercalate, isInfixOf, foldl')
 import Data.Typeable (typeRep, Typeable)
-import Text.Read (readEither)
-import Data.List.Split (splitOn)
-import Data.Either (fromRight)
 import Data.Function ((&))
-import Data.Coerce (coerce)
 import Unsafe.Coerce (unsafeCoerce)
-import Data.Type.Equality
-import Data.Type.Ord
 import Data.Bool
 import Numeric (showIntAtBase)
 import Data.Char (intToDigit)
 
 import Dat.Util
-
-data X1  = X10                                                                                     deriving(Eq, Generic, Show, Enum, Bounded)
-data X2  = X20 | X21                                                                               deriving(Eq, Generic, Show, Enum, Bounded)
-data X3  = X30 | X31 | X32                                                                         deriving(Eq, Generic, Show, Enum, Bounded)
-data X4  = X40 | X41 | X42 | X43                                                                   deriving(Eq, Generic, Show, Enum, Bounded)
-data X5  = X50 | X51 | X52 | X53 | X54                                                             deriving(Eq, Generic, Show, Enum, Bounded)
-data X6  = X60 | X61 | X62 | X63 | X64 | X65                                                       deriving(Eq, Generic, Show, Enum, Bounded)
-data X7  = X70 | X71 | X72 | X73 | X74 | X75 | X76                                                 deriving(Eq, Generic, Show, Enum, Bounded)
-data X8  = X80 | X81 | X82 | X83 | X84 | X85 | X86 | X87                                           deriving(Eq, Generic, Show ,Enum, Bounded)
-data X9  = X90 | X91 | X92 | X93 | X94 | X95 | X96 | X97 | X98                                     deriving(Eq, Generic, Show ,Enum, Bounded)
-data XA  = XA0 | XA1 | XA2 | XA3 | XA4 | XA5 | XA6 | XA7 | XA8 | XA9                               deriving(Eq, Generic, Show ,Enum, Bounded)
-data XB  = XB0 | XB1 | XB2 | XB3 | XB4 | XB5 | XB6 | XB7 | XB8 | XB9 | XBA                         deriving(Eq, Generic, Show ,Enum, Bounded)
-data XC  = XC0 | XC1 | XC2 | XC3 | XC4 | XC5 | XC6 | XC7 | XC8 | XC9 | XCA | XCB                   deriving(Eq, Generic, Show ,Enum, Bounded)
-data XD  = XD0 | XD1 | XD2 | XD3 | XD4 | XD5 | XD6 | XD7 | XD8 | XD9 | XDA | XDB | XDC             deriving(Eq, Generic, Show ,Enum, Bounded)
-data XE  = XE0 | XE1 | XE2 | XE3 | XE4 | XE5 | XE6 | XE7 | XE8 | XE9 | XEA | XEB | XEC | XED       deriving(Eq, Generic, Show ,Enum, Bounded)
-data XF  = XF0 | XF1 | XF2 | XF3 | XF4 | XF5 | XF6 | XF7 | XF8 | XF9 | XFA | XFB | XFC | XFD | XFE deriving(Eq, Generic, Show ,Enum, Bounded)
-
-
-data Y
-  = Y0
-  | Y1 Int
-  | Y2 String Bool
-  | Y3 Float Double [String]
-  deriving (Show, Generic)
+import Test.QuickCheck (Arbitrary)
 
 
 -- Dat type
 --
 -- | Generic data type with type level info
-newtype Dat (dNm :: Symbol) c = DatVal { dCon :: c } deriving (Show)
+newtype Dat (dNm :: Symbol) c = DatVal { dCon :: c } deriving (Show, Generic, Eq )
 
 -- | Lifted to kind KPair with type constructor ::> representing sum type constructor selection
 data KPair = Symbol ::> Type
@@ -77,8 +42,8 @@ type family Lookup (nm :: Symbol) (cs :: [KPair]) :: Type where
   Lookup nm (nm' ::> t ': cs) = Lookup nm cs
 
 -- | Get Index of selected constructor
-class CIx cs                                  where cIx :: Con cs -> Int
-instance CIx '[]                              where cIx (ConVal _ _) = 0
+class CIx cs                                              where cIx :: Con cs -> Int
+instance CIx '[]                                          where cIx (ConVal _ _) = 0
 instance (CIx cs, KnownSymbol nm) => CIx (nm ::> t ': cs) where cIx cv@(ConVal p  _) = 1 + (eqNm p (Proxy @nm) & bool (cIx @cs (unsafeCoerce cv :: Con cs)) (-1))
 
 -- | Generic product operator
@@ -101,36 +66,17 @@ type NmCst nm cs = (KnownSymbol nm, Show (Lookup nm cs))
 -- | Constructors typed list
 data Con (cs :: [KPair]) = forall nm. NmCst nm cs  => ConVal { cNm :: Proxy nm, cT :: Lookup nm cs }
 
+instance                                         Eq (Con '[])                 where a == b = False
+instance (KnownSymbol nm, Eq (Con cs), Eq sl) => Eq (Con ((nm ::> sl) ': cs)) where ConVal p0 t0 == ConVal p1 t1 =  eqNm p0 (Proxy @nm)
+                                                                                                 && eqNm p1 (Proxy @nm)
+                                                                                                 && (unsafeCoerce t0 :: sl) == (unsafeCoerce t1 :: sl )
+
 instance Show (Con cs) where
   show (ConVal (Proxy :: Proxy nm) l) = symbolVal (Proxy @nm) <> " (" <> show l <> ")"
 
 -- | Con type concatenation
 type family CCat a b where
   CCat (Con as) (Con bs) = Con (LCat as bs)
-
--- dats  :: [ Dat "Act"
---            (  Con   '[ "Sp"  ::> (Int :& String :& Bool :& End )
---                      , "Rm"  ::> (Int :& End)
---                      , "Mv"  ::> (Int :& (Int,Int) :& End )
---                      , "Clr" ::> End
---                      ]
---            )
---          ]
--- dats = [ DatVal $ ConVal (Proxy @"Rm") $ 1 :& EndVal
---        , DatVal $ ConVal (Proxy @"Sp") $ 1 :& "bal" :& True :& EndVal
---        , DatVal $ ConVal (Proxy @"Clr") $ EndVal
---        ]
-
--- dats2  :: [ Dat "Act"
---            (  Con   '[ "Sp"  ::> (Int :& String :& Bool :& End )
---                      , "Rm"  ::> (Int :& End)
---                      ]
---            )
---          ]
--- dats2 = [ DatVal $ ConVal (Proxy @"Rm") $ 1 :& EndVal
---        , DatVal $ ConVal (Proxy @"Sp") $ 1 :& "bal" :& True :& EndVal
---        ]
-
 
 
 -- Conversion between Dat and Generic representation
