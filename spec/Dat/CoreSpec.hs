@@ -14,11 +14,11 @@
 module Dat.CoreSpec ( spec) where
 
 import Test.Hspec
-import Dat.Core
-import GHC.Generics
+import GHC.Generics (Generic)
 import Test.Hspec.QuickCheck (prop)
 import Test.QuickCheck ((===))
 
+import Dat.Core
 
 data X1  = X10                                                                                     deriving(Eq, Generic, Show, Enum, Bounded)
 data X2  = X20 | X21                                                                               deriving(Eq, Generic, Show, Enum, Bounded)
@@ -37,34 +37,32 @@ data XE  = XE0 | XE1 | XE2 | XE3 | XE4 | XE5 | XE6 | XE7 | XE8 | XE9 | XEA | XEB
 data XF  = XF0 | XF1 | XF2 | XF3 | XF4 | XF5 | XF6 | XF7 | XF8 | XF9 | XFA | XFB | XFC | XFD | XFE deriving(Eq, Generic, Show ,Enum, Bounded)
 
 data Y
-  = Y0
-  | Y1 Int
-  | Y2 String Bool
-  | Y3 Float Double [String]
+  = Y4 Bool  Bool Bool Bool
   deriving (Show, Generic)
 
-type DatSmpl0 =  Dat "Act"
-           (  Con   '[ "Sp"  ::> (Int :& String :& Bool :& End )
-                     , "Rm"  ::> (Int :& End)
-                     , "Mv"  ::> (Int :& (Int,Int) :& End )
-                     , "Clr" ::> End
-                     ]
-           )
+-- type DSmpl0
+--   = D "Act"
+--     ( C '[ "Sp"  ::> (Int :& String :& Bool :& E )
+--          , "Rm"  ::> (Int :& E)
+--          , "Mv"  ::> (Int :& (Int,Int) :& E )
+--          , "Clr" ::> E
+--          ]
+--     )
 
--- dats :: DatSmpl0
--- dats = [ DatVal $ ConVal (Proxy @"Rm") $ 1 :& EndVal
---        , DatVal $ ConVal (Proxy @"Sp") $ 1 :& "bal" :& True :& EndVal
---        , DatVal $ ConVal (Proxy @"Clr") $ EndVal
+-- dats :: DSmpl0
+-- dats = [ DV $ ConVal (Proxy @"Rm") $ 1 :& EndVal
+--        , DV $ ConVal (Proxy @"Sp") $ 1 :& "bal" :& True :& EndVal
+--        , DV $ ConVal (Proxy @"Clr") $ EndVal
 --        ]
 
--- dats2  :: [ Dat "Act"
---            (  Con   '[ "Sp"  ::> (Int :& String :& Bool :& End )
---                      , "Rm"  ::> (Int :& End)
+-- dats2  :: [ D "Act"
+--            (  C   '[ "Sp"  ::> (Int :& String :& Bool :& E )
+--                      , "Rm"  ::> (Int :& E)
 --                      ]
 --            )
 --          ]
--- dats2 = [ DatVal $ ConVal (Proxy @"Rm") $ 1 :& EndVal
---        , DatVal $ ConVal (Proxy @"Sp") $ 1 :& "bal" :& True :& EndVal
+-- dats2 = [ DV $ ConVal (Proxy @"Rm") $ 1 :& EndVal
+--        , DV $ ConVal (Proxy @"Sp") $ 1 :& "bal" :& True :& EndVal
 --        ]
 
 
@@ -77,7 +75,7 @@ spec = describe "All specs:" $ do
 -- idDSpec :: Spec
 -- idDSpec = do
 --   describe "dToG >>> gToD identity spec" $
---     prop "atEnd maches segment atEnd" $ \(d :: DatSmpl0 ) ->
+--     prop "atEnd maches segment atEnd" $ \(d :: DSmpl0 ) ->
 --       d === d
 
 
