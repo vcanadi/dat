@@ -16,7 +16,6 @@ module Dat.CoreSpec ( spec) where
 import Test.Hspec
 import GHC.Generics (Generic)
 import Test.Hspec.QuickCheck (prop)
-import Test.QuickCheck ((===))
 
 import Dat.Core
 
@@ -37,7 +36,11 @@ data XE  = XE0 | XE1 | XE2 | XE3 | XE4 | XE5 | XE6 | XE7 | XE8 | XE9 | XEA | XEB
 data XF  = XF0 | XF1 | XF2 | XF3 | XF4 | XF5 | XF6 | XF7 | XF8 | XF9 | XFA | XFB | XFC | XFD | XFE deriving(Eq, Generic, Show ,Enum, Bounded)
 
 data Y
-  = Y4 Bool  Bool Bool Bool
+  = Y0
+  | Y1 Int
+  | Y2 String Bool
+  | Y3 Float Double [String]
+  | Y4 Float Double [String] Bool
   deriving (Show, Generic)
 
 -- type DSmpl0

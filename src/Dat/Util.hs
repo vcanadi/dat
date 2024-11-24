@@ -14,28 +14,12 @@
 
 module Dat.Util where
 
-import Linear.V2(V2)
-import Linear.V3(V3)
 import Data.Kind (Type)
 import GHC.TypeLits
 import Data.Proxy
-import GHC.Generics (M1 (..), (:+:) (..), (:*:) ((:*:)), Generic (from, Rep), Meta (..), D, C, C1, S1, Rec0, U1(U1), K1(K1), D1, to, Constructor (conName), Datatype (datatypeName), Selector (selName), FixityI(PrefixI), SourceUnpackedness(..), SourceStrictness(..), DecidedStrictness(..) )
-import Control.Lens.TH(makeLenses)
-import Data.Map.Strict (Map, insertWith, fromList, unionWith, toList)
-import Control.Arrow ((>>>), Arrow (second), left)
-import Data.List (intercalate, isInfixOf, foldl')
-import Data.Typeable (typeRep, Typeable)
-import Text.Read (readEither)
-import Data.List.Split (splitOn)
-import Data.Either (fromRight)
-import Data.Function ((&))
-import Data.Coerce (coerce)
-import Unsafe.Coerce (unsafeCoerce)
-import Data.Type.Equality
-import Data.Type.Ord
-import Data.Bool
-import Numeric (showIntAtBase)
-import Data.Char (intToDigit)
+import GHC.Generics (M1, (:+:) , (:*:) , Generic (Rep), Meta , C1, S1, Rec0, U1, K1
+  , D1, Constructor (conName), Datatype (datatypeName) )
+import Data.Typeable (typeRep )
 
 -- | Max Width (max number of fields of any product)
 class                    MW (f :: Type -> Type) where mW :: Proxy f -> Int
@@ -80,6 +64,7 @@ instance {-# OVERLAPPABLE #-} (Generic a, GSH (Rep a)) => SH a where sh us d _ =
 class GTypNm f => GSH (f :: Type -> Type)     where gSH :: [String] -> Int -> Proxy f -> String
 instance (GSHΣ f, Datatype m) => GSH (D1 m f) where gSH us d _ = gSHΣ (gTypNm (Proxy @(D1 m f)):("["<>gTypNm (Proxy @(D1 m f))<>"]"):us) d (Proxy @f)
 
+tab :: Int -> String
 tab d = "\n" <> concat (replicate d "   ")
 
 -- | "Generic Show" logic on generic sum type
@@ -98,7 +83,7 @@ instance (GSHπ f, GSHπ g) => GSHπ (f :*: g)       where gSHπ us d _ = tab d 
 instance (SH a, TypNm a) => GSHπ (S1 m (Rec0 a)) where gSHπ us d _ = if typNm (Proxy @a) `elem` us
                                                                      then tab d <> "{" <> typNm (Proxy @a) <> "}"
                                                                      else sh (typNm (Proxy @a):us) d (Proxy @a)
-instance GSHπ U1                                 where gSHπ us _ _ = ""
+instance GSHπ U1                                 where gSHπ _ _ _ = ""
 
 data Dummy (t :: Meta) (c :: Type -> Type) f = Dummy
 

@@ -16,16 +16,12 @@ module Dat.Core where
 import Data.Kind (Type)
 import GHC.TypeLits
 import Data.Proxy
-import GHC.Generics (M1 (..), (:+:) (..), (:*:) ((:*:)), Generic (from, Rep), Meta (..),  C1, S1, Rec0, U1(U1), K1(K1), D1, to, Constructor (conName), Datatype (datatypeName), Selector (selName), FixityI(PrefixI), SourceUnpackedness(..), SourceStrictness(..), DecidedStrictness(..) )
-import Data.Typeable (typeRep, Typeable)
+import GHC.Generics (M1 (..), (:+:) (..), (:*:) ((:*:)), Generic (from, Rep), Meta (..),  C1, S1, Rec0, U1(U1), K1(K1), D1, to, FixityI(PrefixI), SourceUnpackedness(..), SourceStrictness(..), DecidedStrictness(..) )
 import Data.Function ((&))
 import Unsafe.Coerce (unsafeCoerce)
 import Data.Bool
-import Numeric (showIntAtBase)
-import Data.Char (intToDigit)
 
 import Dat.Util
-import Test.QuickCheck (Arbitrary)
 
 
 -- | Lifted to kind CPair with type constructor ::> representing sum type constructor selection
@@ -60,17 +56,17 @@ data (:&) s ss = s :& ss deriving (Show)
 
 class PTaken as (n :: Nat)                        where pTake :: as -> PTake n as
 instance {-# OVERLAPS #-} PTaken E n              where pTake EV = EV
-instance {-# OVERLAPPING #-} PTaken (a :& as) 0   where pTake xs = EV
+instance {-# OVERLAPPING #-} PTaken (a :& as) 0   where pTake _ = EV
 instance PTaken as (n - 1) => PTaken (a :& as) n  where pTake (x :& xs) = unsafeCoerce $ x :& pTake @as @(n - 1) xs
 
 class PDropped a (n :: Nat)                          where pDrop ::  a -> PDrop n a
 instance {-# OVERLAPS #-}PDropped E n                                where pDrop EV = EV
 instance {-# OVERLAPPING #-}PDropped (a :& as) 0                        where pDrop xs = xs
-instance PDropped as (n - 1) => PDropped (a :& as) n where pDrop (x :& xs) = unsafeCoerce $ pDrop @as @(n - 1) xs
+instance PDropped as (n - 1) => PDropped (a :& as) n where pDrop (_ :& xs) = unsafeCoerce $ pDrop @as @(n - 1) xs
 
 class PLen a                       where pLen :: a -> Int
 instance PLen E                    where pLen EV = 0
-instance PLen as => PLen (a :& as) where pLen (x :& xs) = succ (pLen xs)
+instance PLen as => PLen (a :& as) where pLen (_ :& xs) = succ (pLen xs)
 
 pTakeHalf :: forall as. (PTaken as (Div (PLength as) 2)) => as -> PTakeHalf as
 pTakeHalf = pTake @as @(Div (PLength as) 2)
@@ -113,7 +109,7 @@ instance                 DoInject E a        where doInject EV x = x
 -- | Type and value representing end of list
 data E = EV deriving Show
 
-instance                                        Eq (SM '[])                 where a == b = False
+instance                                        Eq (SM '[])                 where _ == _ = False
 instance (KnownSymbol nm, Eq (SM cs), Eq sl) => Eq (SM ((nm ::> sl) ': cs)) where SMV p0 t0 == SMV p1 t1 = eqNm p0 (Proxy @nm)
                                                                                                         && eqNm p1 (Proxy @nm)
                                                                                                         && (unsafeCoerce t0 :: sl)
@@ -183,31 +179,37 @@ type family SmToF (c :: Type) :: Type -> Type where
 
 -- | Type level conversion PR(&:) --> Generic.:*:
 type family SToF (sel :: Type) :: Type -> Type where
+  SToF E = U1
   SToF (a :& E) = S1 ('MetaSel 'Nothing NoSourceUnpackedness NoSourceStrictness DecidedLazy) (Rec0 a)
   SToF as = SToF (PTakeHalf as) :*: SToF (PDropHalf as)
 
 -- | DV --> Generic.D1
 class DToG  (d :: Type)                                          where dToG :: d -> DToF d p
-instance (SMToG (SM cs), SmIx cs, Len cs) => DToG (D dn (SM cs)) where dToG (DV cv@(SMV p _)) = M1 $ cToG @(SM cs) (smIx @cs cv) cv
+instance (SMToG (SM cs), SmIx cs, Len cs) => DToG (D dn (SM cs)) where dToG (DV cv@(SMV _ _)) = M1 $ cToG @(SM cs) (smIx @cs cv) cv
 
 -- | SMV --> Generic.:+:
 class    SMToG (c :: Type)               where cToG :: Int -> c -> SmToF c p
 instance {-# OVERLAPS #-} PRToG sl
-  => SMToG (SM '[ nm ::> sl ])           where cToG _ cv@(SMV p slVal) = M1 $ sToG (unsafeCoerce slVal :: sl)
+  => SMToG (SM '[ nm ::> sl ])           where cToG _ (SMV _ slVal) = M1 $ sToG (unsafeCoerce slVal :: sl)
 instance {-# OVERLAPPING #-}
          ( SMToG (SM (TakeHalf cs))
          , SMToG (SM (DropHalf cs))
          , KnownNat (Div (Length cs) 2)
          , Len cs)
-  => SMToG (SM cs)                       where cToG cIx cv@(SMV p sl) = if cIx < len (Proxy @cs) `div` 2
-                                                                      then unsafeCoerce $ L1 $ cToG cIx                                                 (unsafeCoerce cv :: SM (TakeHalf cs))
-                                                                      else unsafeCoerce $ R1 $ cToG (cIx - fromIntegral (natVal (Proxy @(HalfLen cs)))) (unsafeCoerce cv :: SM (DropHalf cs))
+  => SMToG (SM cs)                       where cToG cIx cv@(SMV _ _) = if cIx < len (Proxy @cs) `div` 2
+                                                                       then unsafeCoerce $ L1 $ cToG cIx                                                 (unsafeCoerce cv :: SM (TakeHalf cs))
+                                                                       else unsafeCoerce $ R1 $ cToG (cIx - fromIntegral (natVal (Proxy @(HalfLen cs)))) (unsafeCoerce cv :: SM (DropHalf cs))
 
 -- | PRV(:&) --> Generic.:*:
-class PRToG (s :: Type)                                                                  where sToG :: s -> SToF s p
-instance {-# OVERLAPS #-}                                                 PRToG (a :& E) where sToG (x :& EV) = M1 $ K1 x
-instance {-# OVERLAPPABLE #-} (PRToG (PTakeHalf as), PRToG (PDropHalf as)
-  , PTaken as (Div (PLength as) 2), PDropped as (Div (PLength as) 2))  => PRToG as       where sToG xs =  unsafeCoerce $ sToG (pTakeHalf xs) :*: sToG (pDropHalf xs)
+class PRToG (s :: Type)                      where sToG :: s -> SToF s p
+instance                      PRToG E        where sToG _         = U1
+instance {-# OVERLAPS #-}     PRToG (a :& E) where sToG (x :& EV) = M1 $ K1 x
+instance {-# OVERLAPPABLE #-}
+         ( PRToG (PTakeHalf as)
+         , PRToG (PDropHalf as)
+         , PTaken as (Div (PLength as) 2)
+         , PDropped as (Div (PLength as) 2))
+  => PRToG as                                where sToG xs = unsafeCoerce $ sToG (pTakeHalf xs) :*: sToG (pDropHalf xs)
 
 
 -- | Smonvert a type to D type representation
