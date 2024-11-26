@@ -14,10 +14,15 @@
 module Dat.CoreSpec ( spec) where
 
 import Test.Hspec
-import GHC.Generics (Generic)
+import GHC.Generics (Generic (..))
 import Test.Hspec.QuickCheck (prop)
-
 import Dat.Core
+import Data.Proxy (Proxy(Proxy))
+import Test.QuickCheck.Property ((===))
+import Test.QuickCheck (Arbitrary (..))
+import Generic.Random
+import Dat.Util (TypNm(typNm), GTypNm)
+import Test.QuickCheck.Gen (chooseEnum)
 
 data X1  = X10                                                                                     deriving(Eq, Generic, Show, Enum, Bounded)
 data X2  = X20 | X21                                                                               deriving(Eq, Generic, Show, Enum, Bounded)
@@ -41,77 +46,95 @@ data Y
   | Y2 String Bool
   | Y3 Float Double [String]
   | Y4 Float Double [String] Bool
-  deriving (Show, Generic)
+  deriving (Show, Generic, Eq)
 
--- type DSmpl0
+data ZX = ZX1 X1
+        | ZX2 X2 X3
+        | ZX3 X4 X5 X6
+        deriving (Show, Eq, Generic)
+
+data Act = Sp Int String Bool
+         | Rm Int
+         | Mv Int (Int,Int)
+         | Clr
+         deriving (Show, Eq, Generic )
+
+instance Arbitrary X1 where arbitrary = genericArbitraryU
+instance Arbitrary X2 where arbitrary = genericArbitraryU
+instance Arbitrary X3 where arbitrary = genericArbitraryU
+instance Arbitrary X4 where arbitrary = genericArbitraryU
+instance Arbitrary X5 where arbitrary = genericArbitraryU
+instance Arbitrary X6 where arbitrary = genericArbitraryU
+instance Arbitrary X7 where arbitrary = genericArbitraryU
+instance Arbitrary X8 where arbitrary = genericArbitraryU
+instance Arbitrary X9 where arbitrary = genericArbitraryU
+instance Arbitrary XA where arbitrary = genericArbitraryU
+instance Arbitrary XB where arbitrary = genericArbitraryU
+instance Arbitrary XC where arbitrary = genericArbitraryU
+instance Arbitrary XD where arbitrary = genericArbitraryU
+instance Arbitrary XE where arbitrary = genericArbitraryU
+instance Arbitrary XF where arbitrary = genericArbitraryU
+instance Arbitrary ZX where arbitrary = genericArbitraryU
+instance Arbitrary Y where arbitrary = genericArbitraryU
+instance Arbitrary Act where arbitrary = genericArbitraryU
+
+-- type DatAct
 --   = D "Act"
---     ( C '[ "Sp"  ::> (Int :& String :& Bool :& E )
+--     ( SM '[ "Sp"  ::> (Int :& String :& Bool :& E )
 --          , "Rm"  ::> (Int :& E)
 --          , "Mv"  ::> (Int :& (Int,Int) :& E )
 --          , "Clr" ::> E
 --          ]
 --     )
 
--- dats :: DSmpl0
--- dats = [ DV $ ConVal (Proxy @"Rm") $ 1 :& EndVal
---        , DV $ ConVal (Proxy @"Sp") $ 1 :& "bal" :& True :& EndVal
---        , DV $ ConVal (Proxy @"Clr") $ EndVal
+-- dats :: [DatAct]
+-- dats = [ DV $ SMV (Proxy @"Rm") $ 1 :& EV
+--        , DV $ SMV (Proxy @"Sp") $ 1 :& "bla" :& True :& EV
+--        , DV $ SMV (Proxy @"Clr") EV
 --        ]
 
 -- dats2  :: [ D "Act"
---            (  C   '[ "Sp"  ::> (Int :& String :& Bool :& E )
---                      , "Rm"  ::> (Int :& E)
---                      ]
+--            (  SM  '[ "Sp"  ::> (Int :& String :& Bool :& E )
+--                    , "Rm"  ::> (Int :& E)
+--                    ]
 --            )
 --          ]
--- dats2 = [ DV $ ConVal (Proxy @"Rm") $ 1 :& EndVal
---        , DV $ ConVal (Proxy @"Sp") $ 1 :& "bal" :& True :& EndVal
---        ]
+-- dats2 = [ DV $ SMV (Proxy @"Rm") $ 1 :& EV
+--         , DV $ SMV (Proxy @"Sp") $ 1 :& "bal" :& True :& EV
+--         ]
 
+data BTree = BLeaf | BNode Int BTree BTree deriving (Eq,Generic, Show)
+instance Arbitrary BTree where arbitrary = genericArbitraryU
 
+newtype Tree = Node [Tree] deriving (Eq,Generic, Show)
+instance Arbitrary Tree where
+  arbitrary = do
+    n <- chooseEnum (0,2)
+    Node . take n <$> sequence (repeat arbitrary)
 
+data Lst = LstEnd |  LstCon Int Lst deriving (Eq,Generic, Show)
+instance Arbitrary Lst where arbitrary = genericArbitraryU
+
+newtype Wrap a = Wrap a deriving (Eq,Generic, Show)
+instance Arbitrary a => Arbitrary (Wrap a) where arbitrary = genericArbitraryU
+
+-- | 'datTo . datFrom == id' test on multiple types
+class IdDatSpec as               where idDatSpec :: Spec
+instance IdDatSpec '[]           where idDatSpec = pure ()
+instance ( Show a, Arbitrary a
+         , Generic a, Eq a
+         , Dat a, GTypNm (Rep a)
+         , IdDatSpec as)
+         => IdDatSpec (a ': as)  where idDatSpec = do
+                                         prop ("datTo . datFrom == id on " <> typNm (Proxy @a)) $ \(t :: a) ->
+                                           t === datTo @a (datFrom t)
+                                         idDatSpec @as
+
+idDSpec :: Spec
+idDSpec = do
+  describe "datTo . datFrom id examples" $
+    idDatSpec @'[Act, X1, X2, X3, X4, X5, X6, X7, X8, X9, XA, XB, XC, XD, XE, XF, Y, ZX, Lst, Wrap Int, Wrap String, BTree, Tree]
 
 spec :: Spec
-spec = describe "All specs:" $ do
-  pure () -- idDSpec
-
--- idDSpec :: Spec
--- idDSpec = do
---   describe "dToG >>> gToD identity spec" $
---     prop "atEnd maches segment atEnd" $ \(d :: DSmpl0 ) ->
---       d === d
-
-
--- | Generate tests like:
--- X10 `shouldDesSerTo` [0,0,0,0]
--- X20 `shouldDesSerTo` [0,0,0,0]
--- X21 `shouldDesSerTo` [1,0,0,0]
--- X30 `shouldDesSerTo` [0,0,0,0]
--- X31 `shouldDesSerTo` [1,0,0,0]
--- X32 `shouldDesSerTo` [2,0,0,0]
--- ...
--- i.e. Xnk `shouldDesSerTo` [k,0,0,0]
--- For all Xnk (0 <= k < n) constructors of all Xn types
--- specGenerics :: Spec
--- specGenerics = describe "Xnk" $ do
---   zipWithM_ shouldSerDesTo (allVals @X2) (ixsLessThan 2 )
---   zipWithM_ shouldSerDesTo (allVals @X3) (ixsLessThan 3 )
---   zipWithM_ shouldSerDesTo (allVals @X4) (ixsLessThan 4 )
---   zipWithM_ shouldSerDesTo (allVals @X5) (ixsLessThan 5 )
---   zipWithM_ shouldSerDesTo (allVals @X6) (ixsLessThan 6 )
---   zipWithM_ shouldSerDesTo (allVals @X7) (ixsLessThan 7 )
---   zipWithM_ shouldSerDesTo (allVals @X8) (ixsLessThan 8 )
---   zipWithM_ shouldSerDesTo (allVals @X9) (ixsLessThan 9 )
---   zipWithM_ shouldSerDesTo (allVals @XA) (ixsLessThan 10)
---   zipWithM_ shouldSerDesTo (allVals @XB) (ixsLessThan 11)
---   zipWithM_ shouldSerDesTo (allVals @XC) (ixsLessThan 12)
---   zipWithM_ shouldSerDesTo (allVals @XD) (ixsLessThan 13)
---   zipWithM_ shouldSerDesTo (allVals @XE) (ixsLessThan 14)
---   zipWithM_ shouldSerDesTo (allVals @XF) (ixsLessThan 15)
---     where
---       ixsLessThan :: Word8 -> [[Word8]]
---       ixsLessThan n = [[2,0,0,0 ,i,0,0,0] | i <- [0..pred n]]
-
---       allVals :: (Enum a, Bounded a) => [a]
---       allVals = [minBound..maxBound]
-
+spec = describe "Dat tests:" $ do
+  idDSpec

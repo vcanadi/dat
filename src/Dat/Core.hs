@@ -23,7 +23,6 @@ import Data.Bool
 
 import Dat.Util
 
-
 -- | Lifted to kind CPair with type constructor ::> representing sum type constructor selection
 data CPair = Symbol ::> Type
 
@@ -33,35 +32,87 @@ type family Lookup (nm :: Symbol) (cs :: [CPair]) :: Type where
   Lookup nm (nm' ::> t ': cs) = Lookup nm cs
 
 -- | Get Index of selected constructor
-class SmIx cs                where smIx :: SM cs -> Int
-instance SmIx' cs => SmIx cs where smIx = smIx' 0
--- | Helper type-class for SmIx
-class SmIx' cs                                                where smIx' :: Int -> SM cs -> Int
-instance SmIx' '[]                                            where smIx' cIx (SMV _ _) = cIx
-instance (SmIx' cs, KnownSymbol nm) => SmIx' (nm ::> t ': cs) where smIx' cIx cv@(SMV p  _) = eqNm p (Proxy @nm) & bool (smIx' @cs (succ cIx) (unsafeCoerce cv :: SM cs)) cIx
+class CIx cs               where cIx :: C cs -> Int
+instance CIx' cs => CIx cs where cIx = cIx' 0
+-- | Helper type-class for CIx
+class CIx' cs                                               where cIx' :: Int -> C cs -> Int
+instance CIx' '[]                                           where cIx' ix (CV _ _) = ix
+instance (CIx' cs, KnownSymbol nm) => CIx' (nm ::> t ': cs) where cIx' ix cv@(CV p  _) = eqNm p (Proxy @nm) & bool (cIx' @cs (succ ix) (unsafeCoerce cv :: C cs)) ix
 
 type NmCst nm cs = (KnownSymbol nm, Show (Lookup nm cs))
 
 -- Dat type
 --
 -- | Generic data type with type-level info
-newtype D (dNm :: Symbol) c = DV { dSm :: c } deriving (Show, Generic, Eq )
+newtype D (dNm :: Symbol) c = DV { dC :: c } deriving (Show, Generic, Eq )
 
 -- | Sum representation. Generic constructor with type-level list of constructors
-data SM (cs :: [CPair]) = forall nm. NmCst nm cs  => SMV { smNm :: Proxy nm, smT :: Lookup nm cs }
+data C (cs :: [CPair]) = forall nm. NmCst nm cs  => CV { cNm :: Proxy nm, cT :: Lookup nm cs }
+
+
+
+-----------------------------------------------------------------------------
+data PR as where
+  PRE :: PR '[]
+  (::&) ::  a -> PR as -> PR (a ': as)
+
+p :: PR '[]
+p = PRE
+
+p' :: PR '[Int]
+p' = 3 ::& PRE
+
+
+instance {-# OVERLAPS #-}                              Show (PR '[])       where show PRE =  " ::& PRE"
+instance {-# OVERLAPPING #-} (Show a, Show (PR as)) => Show (PR (a ': as)) where show (x ::& pr) = show x <> " ::& " <> show pr
+
+class PRTake n as                              where prTake :: PR as -> PR (Take n as)
+instance PRTake n '[]                          where prTake PRE = PRE
+instance PRTake 0 (a ': as)                    where prTake _ = PRE
+instance PRTake (n-1) as => PRTake n (a ': as) where prTake (x ::& pr) = unsafeCoerce $ x ::& prTake @(n - 1) pr
+
+
+class PRDrop n as                              where prDrop :: PR as -> PR (Drop n as)
+instance PRDrop n '[]                          where prDrop PRE = PRE
+instance PRDrop 0 (a ': as)                    where prDrop pr = pr
+instance PRDrop (n-1) as => PRDrop n (a ': as) where prDrop (x ::& pr) = unsafeCoerce $ prDrop @(n - 1) pr
+
+prLen :: PR as -> Int
+prLen PRE = 0
+prLen (_ ::& xs) = succ (prLen xs)
+
+prTakeHalf :: forall as. PRTake (HalfLen as) as => PR as -> PR (TakeHalf as)
+prTakeHalf = prTake @(HalfLen as)
+
+prDropHalf :: forall as. PRDrop (HalfLen as) as => PR as -> PR (DropHalf as)
+prDropHalf = prDrop  @(HalfLen as)
+
+type family LInject as bs where
+  LInject (as ': bs) cs = as ': LInject bs cs
+  LInject '[] as = as
+
+prInject :: PR as -> PR bs -> PR (LInject as bs)
+prInject (x ::& ys) zs = x ::& prInject ys zs
+prInject PRE pr = pr
+
+------------------------------------------------------------------------------------------------------------
+
 
 -- | Generic product operator
 infixr 7 :&
-data (:&) s ss = s :& ss deriving (Show)
+data (:&) s ss = s :& ss
 
-class PTaken as (n :: Nat)                        where pTake :: as -> PTake n as
-instance {-# OVERLAPS #-} PTaken E n              where pTake EV = EV
-instance {-# OVERLAPPING #-} PTaken (a :& as) 0   where pTake _ = EV
-instance PTaken as (n - 1) => PTaken (a :& as) n  where pTake (x :& xs) = unsafeCoerce $ x :& pTake @as @(n - 1) xs
+instance {-# OVERLAPS #-}               Show a => Show (a :& E)  where show (x :& EV) = show x <> " :& EV"
+instance {-# OVERLAPPING #-} (Show a, Show as) => Show (a :& as) where show (x :& xs) = show x <> " :& " <> show xs
+
+class PTaken as (n :: Nat)                       where pTake :: as -> PTake n as
+instance {-# OVERLAPS #-}     PTaken E n         where pTake EV = EV
+instance {-# OVERLAPPING #-}  PTaken (a :& as) 0 where pTake _ = EV
+instance PTaken as (n - 1) => PTaken (a :& as) n where pTake (x :& xs) = unsafeCoerce $ x :& pTake @as @(n - 1) xs
 
 class PDropped a (n :: Nat)                          where pDrop ::  a -> PDrop n a
-instance {-# OVERLAPS #-}PDropped E n                                where pDrop EV = EV
-instance {-# OVERLAPPING #-}PDropped (a :& as) 0                        where pDrop xs = xs
+instance {-# OVERLAPS #-}       PDropped E n         where pDrop EV = EV
+instance {-# OVERLAPPING #-}    PDropped (a :& as) 0 where pDrop xs = xs
 instance PDropped as (n - 1) => PDropped (a :& as) n where pDrop (_ :& xs) = unsafeCoerce $ pDrop @as @(n - 1) xs
 
 class PLen a                       where pLen :: a -> Int
@@ -109,33 +160,35 @@ instance                 DoInject E a        where doInject EV x = x
 -- | Type and value representing end of list
 data E = EV deriving Show
 
-instance                                        Eq (SM '[])                 where _ == _ = False
-instance (KnownSymbol nm, Eq (SM cs), Eq sl) => Eq (SM ((nm ::> sl) ': cs)) where SMV p0 t0 == SMV p1 t1 = eqNm p0 (Proxy @nm)
-                                                                                                        && eqNm p1 (Proxy @nm)
-                                                                                                        && (unsafeCoerce t0 :: sl)
-                                                                                                        == (unsafeCoerce t1 :: sl )
+instance                                       Eq (C '[])                 where _ == _ = False
+instance (KnownSymbol nm, Eq (C cs), Eq sl) => Eq (C ((nm ::> sl) ': cs)) where CV p0 t0 == CV p1 t1 = eqNm p0 (Proxy @nm)
+                                                                                                    && eqNm p1 (Proxy @nm)
+                                                                                                    && (unsafeCoerce t0 :: sl)
+                                                                                                    == (unsafeCoerce t1 :: sl )
 
-instance Show (SM cs) where
-  show (SMV (Proxy :: Proxy nm) l) = symbolVal (Proxy @nm) <> " " <> show l
+instance Show (C cs) where
+  show (CV (Proxy :: Proxy nm) l) = symbolVal (Proxy @nm) <> " ( " <> show l <> " ) "
 
--- | SM type concatenation
-type family SmCat a b where
-  SmCat (SM as) (SM bs) = SM (LCat as bs)
+-- | C type concatenation
+type family CCat a b where
+  CCat (C as) (C bs) = C (LCat as bs)
 
 
 -- Conversion between D and Generic representation
 
 
 -- G --> D
+
+-- Type level transformation
 --
 -- | Type level conversion Generic.D1 --> D -
 type family FToD (f :: Type -> Type) :: Type where
-  FToD (D1 ('MetaData dn m p nt) f) = D dn (FToSM f)
+  FToD (D1 ('MetaData dn m p nt) f) = D dn (FToC f)
 
--- | Type level conversion Generic.:+: --> SM
-type family FToSM (f :: Type -> Type) :: Type where
-  FToSM (f :+: g) = SmCat (FToSM f) (FToSM g)
-  FToSM (C1 ('MetaCons nm fx s) f) = SM '[ nm ::> FToPR f ]
+-- | Type level conversion Generic.:+: --> C
+type family FToC (f :: Type -> Type) :: Type where
+  FToC (f :+: g) = CCat (FToC f) (FToC g)
+  FToC (C1 ('MetaCons nm fx s) f) = C '[ nm ::> FToPR f ]
 
 -- | Type level conversion Generic.:*: --> PR(:&)
 type family FToPR (f :: Type -> Type) where
@@ -144,16 +197,17 @@ type family FToPR (f :: Type -> Type) where
   FToPR (S1 ('MetaSel ('Just r) i j k) (Rec0 a)) = a :& E
   FToPR U1 = E
 
+-- Value level transformation
 
 -- | Generic.D1 --> DV
 class GToD (f :: Type -> Type)                        where gToD :: f p -> FToD f
-instance GToSM f => GToD (D1 ('MetaData dn m p nt) f) where gToD (M1 x) = DV @dn $ gToSm @f x
+instance GToC f => GToD (D1 ('MetaData dn m p nt) f) where gToD (M1 x) = DV @dn $ gToC @f x
 
--- | Generic.:+:  --> SMV
-class GToSM (f :: Type -> Type)                    where gToSm :: f p -> FToSM f
-instance (GToSM fL, GToSM fR) => GToSM (fL :+: fR) where gToSm x  = case x of L1 y -> unsafeCoerce $ gToSm @fL y; R1 y -> unsafeCoerce $ gToSm @fR y
+-- | Generic.:+:  --> CV
+class GToC (f :: Type -> Type)                    where gToC :: f p -> FToC f
+instance (GToC fL, GToC fR) => GToC (fL :+: fR) where gToC x  = case x of L1 y -> unsafeCoerce $ gToC @fL y; R1 y -> unsafeCoerce $ gToC @fR y
 instance (GToPR f, KnownSymbol nm, Show (FToPR f))
-              => GToSM (C1 ('MetaCons nm fx s) f)  where gToSm (M1 x) = SMV (Proxy @nm) $ gToS @f x
+              => GToC (C1 ('MetaCons nm fx s) f)  where gToC (M1 x) = CV (Proxy @nm) $ gToS @f x
 
 -- | Generic.:*:  --> PRV(:&)
 class GToPR (f :: Type -> Type)                                              where gToS :: f p -> FToPR f
@@ -163,19 +217,18 @@ instance TypNm a => GToPR (S1 ('MetaSel ('Just r) i j k) (Rec0 a))           whe
 instance GToPR U1                                                            where gToS _ = EV
 
 
-
-
-
 -- D --> G
+
+-- Type level transformation
 --
 -- | Type level conversion D --> Generic.D1
 type family DToF (dat :: Type) :: Type -> Type where
-  DToF (D dn (SM cs)) = (D1 ('MetaData dn "Dat.CoreSpec" "main" False) (SmToF (SM cs)))
+  DToF (D dn (C cs)) = (D1 ('MetaData dn "Dat.CoreSpec" "main" False) (CToF (C cs)))
 
--- | Type level conversion SM --> Generic.:+:
-type family SmToF (c :: Type) :: Type -> Type where
-  SmToF (SM '[nm' ::> sl]) = C1 ('MetaCons nm' PrefixI False) (SToF sl)
-  SmToF (SM cs)            = SmToF (SM (TakeHalf cs)) :+: SmToF (SM (DropHalf cs))
+-- | Type level conversion C --> Generic.:+:
+type family CToF (c :: Type) :: Type -> Type where
+  CToF (C '[nm' ::> sl]) = C1 ('MetaCons nm' PrefixI False) (SToF sl)
+  CToF (C cs)            = CToF (C (TakeHalf cs)) :+: CToF (C (DropHalf cs))
 
 -- | Type level conversion PR(&:) --> Generic.:*:
 type family SToF (sel :: Type) :: Type -> Type where
@@ -183,22 +236,24 @@ type family SToF (sel :: Type) :: Type -> Type where
   SToF (a :& E) = S1 ('MetaSel 'Nothing NoSourceUnpackedness NoSourceStrictness DecidedLazy) (Rec0 a)
   SToF as = SToF (PTakeHalf as) :*: SToF (PDropHalf as)
 
+-- Value level transformation
+
 -- | DV --> Generic.D1
 class DToG  (d :: Type)                                          where dToG :: d -> DToF d p
-instance (SMToG (SM cs), SmIx cs, Len cs) => DToG (D dn (SM cs)) where dToG (DV cv@(SMV _ _)) = M1 $ cToG @(SM cs) (smIx @cs cv) cv
+instance (CToG (C cs), CIx cs, Len cs) => DToG (D dn (C cs)) where dToG (DV cv@(CV _ _)) = M1 $ cToG @(C cs) (cIx @cs cv) cv
 
--- | SMV --> Generic.:+:
-class    SMToG (c :: Type)               where cToG :: Int -> c -> SmToF c p
+-- | CV --> Generic.:+:
+class    CToG (c :: Type)               where cToG :: Int -> c -> CToF c p
 instance {-# OVERLAPS #-} PRToG sl
-  => SMToG (SM '[ nm ::> sl ])           where cToG _ (SMV _ slVal) = M1 $ sToG (unsafeCoerce slVal :: sl)
+  => CToG (C '[ nm ::> sl ])           where cToG _ (CV _ slVal) = M1 $ sToG (unsafeCoerce slVal :: sl)
 instance {-# OVERLAPPING #-}
-         ( SMToG (SM (TakeHalf cs))
-         , SMToG (SM (DropHalf cs))
+         ( CToG (C (TakeHalf cs))
+         , CToG (C (DropHalf cs))
          , KnownNat (Div (Length cs) 2)
          , Len cs)
-  => SMToG (SM cs)                       where cToG cIx cv@(SMV _ _) = if cIx < len (Proxy @cs) `div` 2
-                                                                       then unsafeCoerce $ L1 $ cToG cIx                                                 (unsafeCoerce cv :: SM (TakeHalf cs))
-                                                                       else unsafeCoerce $ R1 $ cToG (cIx - fromIntegral (natVal (Proxy @(HalfLen cs)))) (unsafeCoerce cv :: SM (DropHalf cs))
+  => CToG (C cs)                       where cToG cIx cv@(CV _ _) = if cIx < len (Proxy @cs) `div` 2
+                                                                       then unsafeCoerce $ L1 $ cToG cIx                                                 (unsafeCoerce cv :: C (TakeHalf cs))
+                                                                       else unsafeCoerce $ R1 $ cToG (cIx - fromIntegral (natVal (Proxy @(HalfLen cs)))) (unsafeCoerce cv :: C (DropHalf cs))
 
 -- | PRV(:&) --> Generic.:*:
 class PRToG (s :: Type)                      where sToG :: s -> SToF s p
@@ -212,7 +267,7 @@ instance {-# OVERLAPPABLE #-}
   => PRToG as                                where sToG xs = unsafeCoerce $ sToG (pTakeHalf xs) :*: sToG (pDropHalf xs)
 
 
--- | Smonvert a type to D type representation
+-- | Convert a type to D type representation
 type family ToDat a where
   ToDat a = FToD (Rep a)
 
@@ -223,3 +278,13 @@ dFrom = gToD . from
 -- | Analogous to Genercs.to that works on D
 dTo :: (Generic a, DToG (FToD (Rep a))) => ToDat a -> a
 dTo = to . unsafeCoerce . dToG
+
+class Dat a where
+  type family DRep a
+  datTo :: DRep a -> a
+  datFrom :: a -> DRep a
+
+instance (Generic a, GToD (Rep a), DToG (FToD (Rep a))) => Dat a where
+  type DRep a = FToD (Rep a)
+  datTo = dTo
+  datFrom = dFrom

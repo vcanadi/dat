@@ -9,7 +9,7 @@ synopsis:           Alternative generic representation of data types
 ghc-options:
   - -Wunused-imports
   - -Werror
-  - -Wall
+  # - -Wall
 
 default-extensions:
   - LambdaCase
@@ -21,6 +21,9 @@ default-extensions:
 
 dependencies:
   - base
+  - hspec
+  - QuickCheck
+  - generic-random
 
 library:
   source-dirs: src
@@ -31,6 +34,5 @@ tests:
     - base
     - dat
     - hspec
-    - QuickCheck
     main: Spec.hs
     source-dirs: spec
