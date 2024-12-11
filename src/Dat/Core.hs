@@ -10,6 +10,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE GADTs #-}
 
 module Dat.Core where
 
@@ -56,14 +57,7 @@ data PR as where
   PRE :: PR '[]
   (::&) ::  a -> PR as -> PR (a ': as)
 
-p :: PR '[]
-p = PRE
-
-p' :: PR '[Int]
-p' = 3 ::& PRE
-
-
-instance {-# OVERLAPS #-}                              Show (PR '[])       where show PRE =  " ::& PRE"
+instance {-# OVERLAPS #-}                              Show (PR '[])       where show PRE = "PRE"
 instance {-# OVERLAPPING #-} (Show a, Show (PR as)) => Show (PR (a ': as)) where show (x ::& pr) = show x <> " ::& " <> show pr
 
 class PRTake n as                              where prTake :: PR as -> PR (Take n as)
