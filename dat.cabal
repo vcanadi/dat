@@ -1,0 +1,65 @@
+cabal-version: 2.2
+
+-- This file has been generated from package.yaml by hpack version 0.36.1.
+--
+-- see: https://github.com/sol/hpack
+
+name:           dat
+version:        0.1.0.0
+synopsis:       Alternative generic representation of data types
+author:         Vito Canadi
+maintainer:     vito.canadi@gmail.com
+license:        NONE
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    CHANGELOG.md
+
+library
+  exposed-modules:
+      Dat.Core
+      Dat.Util
+  other-modules:
+      Paths_dat
+  autogen-modules:
+      Paths_dat
+  hs-source-dirs:
+      src
+  default-extensions:
+      LambdaCase
+      OverloadedStrings
+      DefaultSignatures
+      ScopedTypeVariables
+      TypeApplications
+      DeriveGeneric
+  ghc-options: -Wunused-imports -Werror
+  build-depends:
+      QuickCheck
+    , base
+    , hspec
+  default-language: Haskell2010
+
+test-suite spec
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Dat.CoreSpec
+      Paths_dat
+  autogen-modules:
+      Paths_dat
+  hs-source-dirs:
+      spec
+  default-extensions:
+      LambdaCase
+      OverloadedStrings
+      DefaultSignatures
+      ScopedTypeVariables
+      TypeApplications
+      DeriveGeneric
+  ghc-options: -Wunused-imports -Werror
+  build-depends:
+      QuickCheck
+    , base
+    , dat
+    , hspec
+  default-language: Haskell2010
